@@ -1,0 +1,69 @@
+%% key exchange
+
+role role_SM(SM:agent,DS:agent,Sigmau:symmetric_key,PKs:public_key,H:hash_func,SND,RCV:channel(dy))
+played_by SM
+def=
+	local
+		State:nat,
+		IDu,Cu,Aa,Bu,T1:text,
+		I1,S1:message
+		
+
+	init
+		State := 0
+	transition
+		1. State=0 /\ RCV(start) =|> State':=1 /\ S1' := H(IDu.Aa.Cu) /\ I1' := xor(IDu,(xor(H(Aa),Aa))) /\ SND({Bu.Aa.S1'.Cu}_PKs,I1',T1)
+end role
+
+role role_DS(SM:agent,DS:agent,Sigmau:symmetric_key,PKs:public_key,H:hash_func,SND,RCV:channel(dy))
+played_by SM
+def=
+	local
+		State:nat,
+		SKs:symmetric_key,
+		Aa,Bu,Cu,IDu,IDs,Bb,Gg,T1,T3,Xi,Cs:text,
+		I1,S1,Xi1,Eta:message
+		
+
+	init
+		State := 0
+	transition
+		1. State=0 /\ RCV({Bu.Aa.S1'.Cu}_PKs,I1',T1) =|> State':=1 /\ SKs' := new() /\ Xi1' := xor(Xi,H(Cu.IDu.Sigmau)) /\ Eta' := xor(IDs,H(Bb.Cs.Cu)) /\ SND({Eta'.Xi1'.Cs.Bb}_Sigmau,T3) /\ secret(SKs',sec_1,{SM,DS}) /\ witness(DS,SM,auth_1,SKs')
+end role
+
+role session(SM:agent,DS:agent,Sigmau,SKs:symmetric_key,PKs:public_key,H:hash_func)
+def=
+	local
+		SND2,RCV2,SND1,RCV1:channel(dy)
+	composition
+                role_SM(SM,DS,Sigmau,PKs,H,SND1,RCV1) /\
+		role_DS(DS,SM,Sigmau,PKs,H,SND2,RCV2)
+end role
+
+role environment()
+def=
+	const
+		pks,pki:public_key,
+		sigmau,sigmai,sks:symmetric_key,
+		h:hash_func,
+                smart_meter,distributed_server:agent,        
+                sec_1,auth_1:protocol_id
+	intruder_knowledge = {smart_meter,distributed_server,sks}    %% ... and we give it to the intruder
+	composition
+                  %% We run the regular session
+		session(smart_meter,distributed_server,sigmau,sks,pks,h) 
+                  %% in parallel with another regular session
+                /\ session(distributed_server,smart_meter,sigmau,sks,pks,h) 
+
+                  %% and a session between the intruder (with key kit) and bob
+                /\ session(i,distributed_server,sigmai,sks,pks,h) 
+                  %% and a session between alice and the intruder (with key kit)
+                /\ session(smart_meter,i,sigmau,sks,pki,h) 
+end role
+
+goal
+    secrecy_of sec_1
+	authentication_on auth_1
+end goal
+
+environment()
